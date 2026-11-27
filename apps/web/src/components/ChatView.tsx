@@ -1,3 +1,4 @@
+import { useSuperAgentPanelLayout } from "./superAgent/panelLayout";
 import { m } from "../i18n/messages";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { useGT, useMessages } from "gt-react";
@@ -474,6 +475,7 @@ const DismissedFallbackWindowSchema = Schema.NullOr(Schema.String);
 const ignoreComposerFocus = () => {};
 
 export default function ChatView(props: ChatViewProps) {
+  const managerPanel = useSuperAgentPanelLayout();
   const gt = useGT();
   const messages = useMessages();
   const {
@@ -2905,7 +2907,7 @@ export default function ChatView(props: ChatViewProps) {
     terminalOpen: Boolean(terminalUiState.terminalOpen),
     previewFocus: isPreviewFocused(),
     previewOpen: previewPanelOpen,
-    rightPanelOpen,
+    rightPanelOpen: managerPanel?.open ?? rightPanelOpen,
     editableFocus: isEditableFocused(eventTarget),
     modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
     composerFocus:
@@ -2952,6 +2954,15 @@ export default function ChatView(props: ChatViewProps) {
     commands: {
       ...terminalShortcuts,
       ...rightPanelShortcuts,
+      "rightPanel.toggle": () => {
+        if (managerPanel) managerPanel.toggle();
+        else rightPanelShortcuts["rightPanel.toggle"]();
+      },
+      "rightPanel.close": (input) => {
+        if (!managerPanel) return rightPanelShortcuts["rightPanel.close"](input);
+        if (!managerPanel.open) return false;
+        if (!input.event.repeat) managerPanel.close();
+      },
       ...threadLifecycleShortcuts,
       "thread.copyReference": ({ event }) => {
         if (!event.repeat) copyActiveThreadReference();
@@ -2999,9 +3010,14 @@ export default function ChatView(props: ChatViewProps) {
   useEffect(() => {
     if (embedded || backgroundThread) return;
     return window.desktopBridge?.onMenuAction((action) => {
-      if (action === "rightPanel.toggle") toggleRightPanelStable();
-      else if (action === "rightPanel.toggleMaximized") toggleRightPanelMaximizedStable();
-      else if (action === "rightPanel.close") closeActiveRightPanelSurfaceStable();
+      if (action === "rightPanel.toggle") {
+        if (managerPanel) managerPanel.toggle();
+        else toggleRightPanelStable();
+      } else if (action === "rightPanel.toggleMaximized") toggleRightPanelMaximizedStable();
+      else if (action === "rightPanel.close") {
+        if (managerPanel) managerPanel.close();
+        else closeActiveRightPanelSurfaceStable();
+      }
     });
   }, [
     embedded,
@@ -3009,6 +3025,7 @@ export default function ChatView(props: ChatViewProps) {
     toggleRightPanelStable,
     toggleRightPanelMaximizedStable,
     closeActiveRightPanelSurfaceStable,
+    managerPanel,
   ]);
 
   usePasteToFocusComposer(embedded ? null : activeThreadId, composerRef);

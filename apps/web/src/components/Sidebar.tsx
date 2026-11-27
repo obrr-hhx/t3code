@@ -1128,7 +1128,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const threads = useQuietThreadShells().filter(
+    (thread) =>
+      thread.id !== "super-agent-manager" || thread.environmentId !== primaryEnvironmentId,
+  );
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
@@ -3089,7 +3092,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     <SidebarFolderDrop>
       <SidebarChromeHeader isElectron={isElectron} />
       {primaryEnvironmentId ? (
-        <SuperAgentLauncher environmentId={primaryEnvironmentId} onOpen={navigateToThread} />
+        <SuperAgentLauncher
+          environmentId={primaryEnvironmentId}
+          onOpen={navigateToThread}
+          active={
+            routeThreadRef?.threadId === "super-agent-manager" &&
+            routeThreadRef.environmentId === primaryEnvironmentId
+          }
+        />
       ) : null}
       <SidebarContent
         ref={sidebarContentRef}

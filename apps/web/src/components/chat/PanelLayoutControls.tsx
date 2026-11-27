@@ -1,3 +1,4 @@
+import { useSuperAgentPanelLayout } from "../superAgent/panelLayout";
 import {
   PanelBottomIcon,
   PanelRightIcon,
@@ -59,6 +60,10 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   onToggleRightPanel,
 }: PanelLayoutControlsProps) {
   const gt = useGT();
+  const managerPanel = useSuperAgentPanelLayout();
+  rightPanelOpen = managerPanel?.open ?? rightPanelOpen;
+  rightPanelAvailable = managerPanel ? true : rightPanelAvailable;
+  onToggleRightPanel = managerPanel?.toggle ?? onToggleRightPanel;
   const threadPanelToggle = (
     <Toggle
       className="relative shrink-0 [-webkit-app-region:no-drag]"
@@ -181,12 +186,13 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
 
 /** The thread panel toggle on a header whose right side the inline right panel covers. */
 export function ThreadPanelHeaderControl(props: PanelLayoutControlsProps) {
+  const managerPanel = useSuperAgentPanelLayout();
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
   return (
     <div
       className={cn(
         "absolute top-[var(--workspace-controls-top)] right-[calc(env(safe-area-inset-right)+0.75rem)] z-50 flex h-[var(--workspace-topbar-height)] items-center [-webkit-app-region:no-drag]",
-        mobileSidebarSheetMounted && "hidden",
+        (mobileSidebarSheetMounted || (managerPanel?.open && !managerPanel.wide)) && "hidden",
       )}
       data-workspace-titlebar-controls
     >
@@ -227,12 +233,18 @@ export function WorkspaceTitlebarControls(props: {
   }, [rightPanelOpen, maximized]);
 
   const mobileSidebarSheetMounted = useMobileSidebarSheetMounted();
+  const managerPanel = useSuperAgentPanelLayout();
   return (
     <div
       ref={controlsRef}
+      style={
+        managerPanel?.wide && managerPanel.open
+          ? { right: "calc(var(--workspace-controls-right) + 20rem)" }
+          : undefined
+      }
       className={cn(
         "pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-50 mr-px flex h-[var(--workspace-topbar-height)] items-center gap-1 [-webkit-app-region:no-drag]",
-        mobileSidebarSheetMounted && "hidden",
+        (mobileSidebarSheetMounted || (managerPanel?.open && !managerPanel.wide)) && "hidden",
       )}
       data-workspace-titlebar-controls
     >

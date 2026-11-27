@@ -33,6 +33,15 @@ minutes can trigger one review when the coordinator's selected check time is due
 the same unchanged stall is not reported repeatedly. Notifications and actual task
 continuation remain the coordinator's job, based on structured worker evidence.
 
+The **Super Agent** entry stays fixed below the sidebar header, independently of the
+worker list's sorting, scrolling, and settled sections. It opens the same coordinator
+conversation, without a duplicate ordinary thread row.
+
+On the coordinator, **Toggle right panel** opens or closes goals and decisions. Wide
+windows remember the panel's visibility; closing and reopening it preserves the current
+search and unsent decision answer. Narrow windows use a dismissible sheet. Its close
+button and review button remain separate from the underlying chat toolbar.
+
 ## Goals, decisions, and memory
 
 The panel supports search, pages of ten records, adding, editing, deleting, and showing

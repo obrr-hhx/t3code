@@ -1,3 +1,5 @@
+import { useSuperAgentPanelLayout } from "./panelLayout";
+import { presentManagerContent } from "./recordPresentation";
 import { randomUUID } from "../../lib/utils";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -10,7 +12,9 @@ import {
 import { T, useGT } from "gt-react";
 import { useState } from "react";
 import {
-  BotIcon,
+  WaypointsIcon,
+  PinIcon,
+  PanelRightCloseIcon,
   ListChecksIcon,
   RefreshCwIcon,
   PlusIcon,
@@ -29,9 +33,11 @@ import { Dialog, DialogPopup, DialogTitle, DialogDescription } from "../ui/dialo
 export function SuperAgentLauncher({
   environmentId,
   onOpen,
+  active = false,
 }: {
   environmentId: EnvironmentId;
   onOpen: (ref: ScopedThreadRef) => unknown;
+  active?: boolean;
 }) {
   const gt = useGT();
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
@@ -58,12 +64,20 @@ export function SuperAgentLauncher({
       onOpen({ environmentId, threadId: result.value.threadId });
   };
   return (
-    <div className="px-3 py-2">
-      <Button variant="ghost" size="sm" disabled={!allowed || busy} onClick={open}>
-        <BotIcon />
+    <div className="shrink-0 px-3 py-2">
+      <Button
+        variant={active ? "secondary" : "ghost"}
+        className="h-10 w-full justify-start"
+        aria-current={active ? "page" : undefined}
+        size="sm"
+        disabled={!allowed || busy}
+        onClick={open}
+      >
+        <WaypointsIcon className="size-4 text-icon-muted" />
         <span>
           <T>Super Agent</T>
         </span>
+        <PinIcon className="ml-auto size-3 text-muted-foreground" aria-hidden="true" />
       </Button>
       {error ? (
         <p role="alert" className="text-xs text-destructive">
@@ -75,30 +89,37 @@ export function SuperAgentLauncher({
 }
 
 export function SuperAgentPanel({ environmentId }: { environmentId: EnvironmentId }) {
-  const [open, setOpen] = useState(false);
+  const layout = useSuperAgentPanelLayout();
+  if (!layout) return null;
+  if (layout.wide)
+    return (
+      <div hidden={!layout.open} className="w-80 min-w-0 shrink-0" data-manager-panel>
+        <ManagerPanel environmentId={environmentId} onClose={layout.close} />
+      </div>
+    );
   return (
-    <>
-      <div className="hidden w-80 shrink-0 lg:block">
+    <Sheet
+      open={layout.open}
+      onOpenChange={(open) => {
+        if (!open) layout.close();
+      }}
+    >
+      <SheetPopup side="right">
+        <SheetTitle className="sr-only">
+          <T>Goals and decisions</T>
+        </SheetTitle>
         <ManagerPanel environmentId={environmentId} />
-      </div>
-      <div className="fixed right-3 top-14 z-20 lg:hidden">
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-          <ListChecksIcon />
-          <T>Goals</T>
-        </Button>
-      </div>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetPopup side="right">
-          <SheetTitle className="sr-only">
-            <T>Goals and decisions</T>
-          </SheetTitle>
-          <ManagerPanel environmentId={environmentId} />
-        </SheetPopup>
-      </Sheet>
-    </>
+      </SheetPopup>
+    </Sheet>
   );
 }
-function ManagerPanel({ environmentId }: { environmentId: EnvironmentId }) {
+function ManagerPanel({
+  environmentId,
+  onClose,
+}: {
+  environmentId: EnvironmentId;
+  onClose?: () => void;
+}) {
   const gt = useGT();
   const [kind, setKind] = useState<"goal" | "decision" | "memory">("goal");
   const [search, setSearch] = useState("");
@@ -140,19 +161,35 @@ function ManagerPanel({ environmentId }: { environmentId: EnvironmentId }) {
       className="flex h-dvh w-full max-w-full flex-col border-l bg-background"
       aria-label={gt("Goals and decisions")}
     >
-      <header className="flex items-center justify-between border-b px-4 py-3 pr-12">
+      <header
+        className={`flex h-[var(--workspace-topbar-height)] min-h-12 shrink-0 items-center justify-between gap-2 border-b px-3 [-webkit-app-region:no-drag] ${onClose ? "" : "pr-12"}`}
+      >
         <h2 className="text-sm font-medium">
           <T>Goals and decisions</T>
         </h2>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title={gt("Review all sessions")}
-          disabled={!allowed || snapshot?.storageAvailable === false}
-          onClick={() => review({ environmentId, input: {} })}
-        >
-          <RefreshCwIcon />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={gt("Review all sessions")}
+            title={gt("Review all sessions")}
+            disabled={!allowed || snapshot?.storageAvailable === false}
+            onClick={() => review({ environmentId, input: {} })}
+          >
+            <RefreshCwIcon />
+          </Button>
+          {onClose ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={gt("Close manager panel")}
+              title={gt("Close manager panel")}
+              onClick={onClose}
+            >
+              <PanelRightCloseIcon />
+            </Button>
+          ) : null}
+        </div>
       </header>
       <div className="flex gap-1 px-3 pt-3" role="tablist">
         {(
@@ -351,6 +388,15 @@ function ManagerRecord({
     expanded ? serverEnvironment.superAgentLive({ environmentId, input: { id: record.id } }) : null,
   );
   const shown = details.data?.records[0] ?? record;
+  const presentation = presentManagerContent(shown.content);
+  const statusLabels = {
+    active: gt("In progress"),
+    blocked: gt("Blocked"),
+    pending: gt("Needs decision"),
+    answered: gt("Answered"),
+    done: gt("Completed"),
+    archived: gt("Archived"),
+  };
   const [answer, setAnswer] = useState("");
   const [sending, setSending] = useState(false);
   const send = async () => {
@@ -383,9 +429,36 @@ function ManagerRecord({
           </Button>
         </div>
       </div>
-      <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-        {shown.content}
+      <p
+        className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground ${expanded ? "" : "line-clamp-5"}`}
+      >
+        {presentation.text}
       </p>
+      {expanded && (presentation.scope || presentation.limits) ? (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            <T>Authorization and evidence</T>
+          </summary>
+          <dl className="mt-2 space-y-2">
+            {presentation.scope ? (
+              <div>
+                <dt className="font-medium">
+                  <T>Scope</T>
+                </dt>
+                <dd className="whitespace-pre-wrap break-words">{presentation.scope}</dd>
+              </div>
+            ) : null}
+            {presentation.limits ? (
+              <div>
+                <dt className="font-medium">
+                  <T>Limits</T>
+                </dt>
+                <dd className="whitespace-pre-wrap break-words">{presentation.limits}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </details>
+      ) : null}
       {record.content.length >= 300 ? (
         <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
           {expanded ? gt("Show less") : gt("View details")}
@@ -422,7 +495,7 @@ function ManagerRecord({
       ) : record.answer ? (
         <p className="whitespace-pre-wrap break-words border-t pt-2 text-sm">{record.answer}</p>
       ) : (
-        <p className="text-xs text-muted-foreground">{record.status}</p>
+        <p className="text-xs text-muted-foreground">{statusLabels[record.status]}</p>
       )}
     </article>
   );

@@ -3,12 +3,11 @@ import {
   getProjectFaviconResourceKey,
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
-import { FolderCodeIcon } from "lucide-react";
+import { FolderCodeIcon, WaypointsIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { createElement, lazy, Suspense, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { projectFaviconUrlAtom, refreshProjectFaviconUrl } from "../state/assets";
-import { deriveProjectIdentity } from "../projectIdentity";
 import { projectIconColorClassName } from "../projectIconColors";
 import { ProjectMonogram } from "./ProjectMonogram";
 import { cn } from "~/lib/utils";
@@ -127,10 +126,12 @@ function ProjectFaviconFallback({
   readonly emoji?: string | undefined;
   readonly projectName?: string | undefined;
 }) {
-  if (projectName && projectName.trim().length > 0) {
-    const identity = deriveProjectIdentity(projectName);
+  if (projectName?.trim().toLowerCase() === "super agent") {
     return (
-      <ProjectMonogram text={identity.monogram} color={identity.color} className={className} />
+      <WaypointsIcon
+        aria-hidden="true"
+        className={cn("size-3.5 shrink-0 text-icon-muted", className)}
+      />
     );
   }
 

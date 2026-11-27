@@ -1,3 +1,4 @@
+import { SuperAgentPanelLayout } from "../components/superAgent/panelLayout";
 import { SuperAgentPanel } from "../components/superAgent/SuperAgent";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 
@@ -14,7 +15,13 @@ function ChatRouteLayout() {
   // Render both routes here so draft promotion keeps the same ChatView mounted.
   const { shownTarget, modalOpen } = useShownThreadRouteTarget();
   return (
-    <>
+    <SuperAgentPanelLayout
+      active={
+        shownTarget?.kind === "server" &&
+        shownTarget.threadRef.threadId === "super-agent-manager" &&
+        !modalOpen
+      }
+    >
       {shownTarget?.kind === "server" && !modalOpen ? (
         <ThreadLinkPrompt threadRef={shownTarget.threadRef} />
       ) : null}
@@ -32,7 +39,7 @@ function ChatRouteLayout() {
       ) : null}
       {modalOpen ? <Outlet /> : null}
       <GlobalVoiceInputIndicator hidden={modalOpen} />
-    </>
+    </SuperAgentPanelLayout>
   );
 }
 
