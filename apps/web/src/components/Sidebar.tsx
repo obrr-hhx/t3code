@@ -1,3 +1,4 @@
+import { SuperAgentLauncher } from "./superAgent/SuperAgent";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
@@ -3087,6 +3088,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   return (
     <SidebarFolderDrop>
       <SidebarChromeHeader isElectron={isElectron} />
+      {primaryEnvironmentId ? (
+        <SuperAgentLauncher environmentId={primaryEnvironmentId} onOpen={navigateToThread} />
+      ) : null}
       <SidebarContent
         ref={sidebarContentRef}
         className="min-h-full"

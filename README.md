@@ -1,3 +1,8 @@
+> **Unofficial personal fork:** maintained by [obrr-hhx](https://github.com/obrr-hhx),
+> with a persistent Super Agent coordinator. This project is not affiliated with or
+> maintained by T3 Tools. See [Super Agent setup and behavior](docs/guides/super-agent.md).
+> Upstream documentation follows below. No custom binary release is provided here.
+
 <p align="center">
   <a href="https://t3.codes">
     <img src="./assets/prod/t3-black-web-icon-192x192.png" width="80" height="80" alt="T3 Code logo" />

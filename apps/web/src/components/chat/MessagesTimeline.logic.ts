@@ -1,3 +1,4 @@
+import { visibleManagerReviews } from "../superAgent/backgroundPresentation";
 import * as DateTime from "effect/DateTime";
 import { msg } from "gt-react";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
@@ -1539,7 +1540,11 @@ function timelineRowEntries(
   >,
 ) {
   const visibility = input.toolCallVisibility ?? "showAll";
-  const entries = input.timelineEntries;
+  const entries = visibleManagerReviews(
+    input.timelineEntries,
+    timelineEntryRunId,
+    failedTimelineRunIds(input.timelineEntries, input.latestRun ?? null),
+  );
   let shown = entries;
   if (visibility === "zen") {
     const answering = input.isWorking && input.latestRun?.turnEnded !== true;

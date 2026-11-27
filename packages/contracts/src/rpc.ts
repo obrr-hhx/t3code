@@ -1,4 +1,11 @@
 import {
+  SuperAgentQuery,
+  SuperAgentSnapshot,
+  SuperAgentMutation,
+  SuperAgentEnsureInput,
+  SuperAgentError,
+} from "./superAgent.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -654,6 +661,10 @@ export const WS_METHODS = {
   workflowsSaveDefinition: "workflows.saveDefinition",
   workflowsDeleteDefinition: "workflows.deleteDefinition",
 
+  superAgentSubscribe: "superAgent.subscribe",
+  superAgentEnsure: "superAgent.ensure",
+  superAgentUpdate: "superAgent.update",
+  superAgentReview: "superAgent.review",
   scheduledTasksSubscribe: "scheduledTasks.subscribe",
   scheduledTasksUpsert: "scheduledTasks.upsert",
   scheduledTasksSetEnabled: "scheduledTasks.setEnabled",
@@ -2403,6 +2414,28 @@ const WsWorkflowsDeleteDefinitionRpc = Rpc.make(WS_METHODS.workflowsDeleteDefini
   error: EnvironmentAuthorizationError,
 });
 
+const WsSuperAgentSubscribeRpc = Rpc.make(WS_METHODS.superAgentSubscribe, {
+  payload: SuperAgentQuery,
+  success: SuperAgentSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+const WsSuperAgentEnsureRpc = Rpc.make(WS_METHODS.superAgentEnsure, {
+  payload: SuperAgentEnsureInput,
+  success: SuperAgentSnapshot,
+  error: Schema.Union([SuperAgentError, EnvironmentAuthorizationError]),
+});
+const WsSuperAgentUpdateRpc = Rpc.make(WS_METHODS.superAgentUpdate, {
+  payload: SuperAgentMutation,
+  success: SuperAgentSnapshot,
+  error: Schema.Union([SuperAgentError, EnvironmentAuthorizationError]),
+});
+const WsSuperAgentReviewRpc = Rpc.make(WS_METHODS.superAgentReview, {
+  payload: Schema.Struct({}),
+  success: Schema.Void,
+  error: Schema.Union([SuperAgentError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksSubscribeRpc = Rpc.make(WS_METHODS.scheduledTasksSubscribe, {
   payload: ScheduledTaskListInput,
   success: ScheduledTaskListResult,
@@ -2589,6 +2622,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsWorkflowsGetDefinitionRpc,
   WsWorkflowsSaveDefinitionRpc,
   WsWorkflowsDeleteDefinitionRpc,
+  WsSuperAgentSubscribeRpc,
+  WsSuperAgentEnsureRpc,
+  WsSuperAgentUpdateRpc,
+  WsSuperAgentReviewRpc,
   WsScheduledTasksSubscribeRpc,
   WsScheduledTasksUpsertRpc,
   WsScheduledTasksSetEnabledRpc,

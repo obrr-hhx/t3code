@@ -1,3 +1,4 @@
+import { SuperAgentPanel } from "../components/superAgent/SuperAgent";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 
 import { ThreadRouteView } from "../components/ThreadRouteView";
@@ -24,6 +25,11 @@ function ChatRouteLayout() {
       ) : (
         <Outlet />
       )}
+      {shownTarget?.kind === "server" &&
+      shownTarget.threadRef.threadId === "super-agent-manager" &&
+      !modalOpen ? (
+        <SuperAgentPanel environmentId={shownTarget.threadRef.environmentId} />
+      ) : null}
       {modalOpen ? <Outlet /> : null}
       <GlobalVoiceInputIndicator hidden={modalOpen} />
     </>
