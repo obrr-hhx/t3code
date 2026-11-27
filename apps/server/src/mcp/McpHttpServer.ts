@@ -1,3 +1,5 @@
+import { SuperAgentToolkit } from "./toolkits/superAgent/tools.ts";
+import * as SuperAgentHandlers from "./toolkits/superAgent/handlers.ts";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -1546,6 +1548,7 @@ export const layerMcpTransport = <RA, RE, RR>(registrations: Layer.Layer<RA, RE,
 /** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
 export const layerTools = Layer.mergeAll(
   layerPreviewToolkit,
+  toolkitRegistration(SuperAgentToolkit, SuperAgentHandlers.layer),
   layerOrchestratorToolkit,
   layerThreadToolkit,
   layerWorkflowToolkit,

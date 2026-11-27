@@ -1,3 +1,4 @@
+import * as SuperAgent from "./superAgent/SuperAgentService.ts";
 import { GitCommandError, OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
 import * as NodeCrypto from "node:crypto";
@@ -1510,6 +1511,7 @@ export const layerWsRpc = (
       const threadViewers = yield* ThreadViewers.ThreadViewers;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const superAgent = yield* SuperAgent.SuperAgentService;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2444,6 +2446,10 @@ export const layerWsRpc = (
         [WS_METHODS.workflowsSaveDefinition]: (input) =>
           workflowDefinitions.save(input.name, input.source),
         [WS_METHODS.workflowsDeleteDefinition]: (input) => workflowDefinitions.remove(input.name),
+        [WS_METHODS.superAgentSubscribe]: (input) => superAgent.subscribe(input),
+        [WS_METHODS.superAgentEnsure]: (input) => superAgent.ensure(input),
+        [WS_METHODS.superAgentUpdate]: (input) => superAgent.update(input, "user"),
+        [WS_METHODS.superAgentReview]: () => superAgent.review(),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),
@@ -3811,6 +3817,7 @@ export const WS_RPC_SERVER_OPTIONS = {
 
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
+    const superAgent = yield* SuperAgent.SuperAgentService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
@@ -3902,7 +3909,12 @@ export const layer = Layer.unwrap(
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               // Handler-context reporters see only request defects, not server-wide defects.
-              Layer.provide(DefectReporter.layer),
+              Layer.provide(
+                Layer.merge(
+                  DefectReporter.layer,
+                  Layer.succeed(SuperAgent.SuperAgentService, superAgent),
+                ),
+              ),
               Layer.provide(AcpRegistrySessions.layer),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
               // Installs outlive the connection that started them and lock across clients.

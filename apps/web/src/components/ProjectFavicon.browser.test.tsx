@@ -123,3 +123,27 @@ it("asks for a new URL only once when the new URL fails too", async () => {
     registry.dispose();
   }
 });
+
+it("uses a quiet icon instead of generated project initials when no favicon exists", async () => {
+  setup();
+  const registry = AtomRegistry.make();
+  const project: ProjectFaviconProject = {
+    environmentId: EnvironmentId.make("test"),
+    workspaceRoot: "/mono-meta",
+    title: "FM",
+    faviconPath: null,
+    projectIcon: null,
+  };
+  try {
+    await using screen = await render(
+      <RegistryContext value={registry}>
+        <ProjectFavicon project={project} />
+      </RegistryContext>,
+    );
+    expect(screen.container.querySelector("svg")).not.toBeNull();
+    expect(screen.container.querySelector('[data-slot="project-monogram"]')).toBeNull();
+    expect(screen.container.textContent).not.toContain("FM");
+  } finally {
+    registry.dispose();
+  }
+});

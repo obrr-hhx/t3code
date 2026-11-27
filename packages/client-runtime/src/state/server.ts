@@ -1687,6 +1687,10 @@ export function createServerEnvironmentAtoms<R, E>(
         return Atom.make((get) => snapshot(get)?.definition?.revision);
       },
     }),
+    superAgentLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:super-agent:live",
+      tag: WS_METHODS.superAgentSubscribe,
+    }),
     scheduledTasksLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,
@@ -1964,6 +1968,24 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    ensureSuperAgent: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:super-agent:ensure",
+      tag: WS_METHODS.superAgentEnsure,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    updateSuperAgent: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:super-agent:update",
+      tag: WS_METHODS.superAgentUpdate,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    reviewSuperAgent: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:super-agent:review",
+      tag: WS_METHODS.superAgentReview,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
     }),
     upsertScheduledTask: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:scheduled-task:upsert",
