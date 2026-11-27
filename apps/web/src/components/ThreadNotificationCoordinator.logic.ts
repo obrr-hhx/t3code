@@ -131,3 +131,13 @@ export function createThreadNotificationGate<Key>(
     },
   };
 }
+
+/** Silent manager inspections must not produce completion sounds, badges or banners. */
+export function allowsManagerCompletion(
+  threadId: string,
+  backgroundWake: boolean,
+  runId: string,
+  accepted: ReadonlyArray<string>,
+): boolean {
+  return threadId !== "super-agent-manager" || !backgroundWake || accepted.includes(runId);
+}

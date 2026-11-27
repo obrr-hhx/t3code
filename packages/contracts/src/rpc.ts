@@ -1,3 +1,5 @@
+import { ForgeCronQuery, ForgeCronMutation, ForgeCronResult } from "./forgeCron.ts";
+import { OrchestratorMcpFailure } from "./orchestratorMcp.ts";
 import {
   SuperAgentQuery,
   SuperAgentSnapshot,
@@ -665,6 +667,8 @@ export const WS_METHODS = {
   superAgentEnsure: "superAgent.ensure",
   superAgentUpdate: "superAgent.update",
   superAgentReview: "superAgent.review",
+  forgeCronRead: "forgeCron.read",
+  forgeCronManage: "forgeCron.manage",
   scheduledTasksSubscribe: "scheduledTasks.subscribe",
   scheduledTasksUpsert: "scheduledTasks.upsert",
   scheduledTasksSetEnabled: "scheduledTasks.setEnabled",
@@ -2414,6 +2418,16 @@ const WsWorkflowsDeleteDefinitionRpc = Rpc.make(WS_METHODS.workflowsDeleteDefini
   error: EnvironmentAuthorizationError,
 });
 
+const WsForgeCronReadRpc = Rpc.make(WS_METHODS.forgeCronRead, {
+  payload: ForgeCronQuery,
+  success: ForgeCronResult,
+  error: Schema.Union([OrchestratorMcpFailure, EnvironmentAuthorizationError]),
+});
+const WsForgeCronManageRpc = Rpc.make(WS_METHODS.forgeCronManage, {
+  payload: ForgeCronMutation,
+  success: ForgeCronResult,
+  error: Schema.Union([OrchestratorMcpFailure, EnvironmentAuthorizationError]),
+});
 const WsSuperAgentSubscribeRpc = Rpc.make(WS_METHODS.superAgentSubscribe, {
   payload: SuperAgentQuery,
   success: SuperAgentSnapshot,
@@ -2622,6 +2636,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsWorkflowsGetDefinitionRpc,
   WsWorkflowsSaveDefinitionRpc,
   WsWorkflowsDeleteDefinitionRpc,
+  WsForgeCronReadRpc,
+  WsForgeCronManageRpc,
   WsSuperAgentSubscribeRpc,
   WsSuperAgentEnsureRpc,
   WsSuperAgentUpdateRpc,

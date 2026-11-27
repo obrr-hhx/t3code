@@ -1030,7 +1030,7 @@ function timelineEntryFailedItem(entry: TimelineEntry) {
     : null;
 }
 
-function failedTimelineRunIds(
+export function failedTimelineRunIds(
   entries: ReadonlyArray<TimelineEntry>,
   latestRun: TimelineLatestRun | null,
 ) {

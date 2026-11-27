@@ -1,4 +1,5 @@
-import { useSuperAgentPanelLayout } from "./panelLayout";
+import { ForgeCronLauncher } from "./ForgeCronPanel";
+import { SuperAgentPanelFrame, useSuperAgentPanelLayout } from "./panelLayout";
 import { presentManagerContent } from "./recordPresentation";
 import { randomUUID } from "../../lib/utils";
 import { useAtomValue } from "@effect/atom-react";
@@ -79,6 +80,7 @@ export function SuperAgentLauncher({
         </span>
         <PinIcon className="ml-auto size-3 text-muted-foreground" aria-hidden="true" />
       </Button>
+      <ForgeCronLauncher environmentId={environmentId} />
       {error ? (
         <p role="alert" className="text-xs text-destructive">
           {gt("Super Agent could not open. Check the provider settings and retry.")}
@@ -93,9 +95,9 @@ export function SuperAgentPanel({ environmentId }: { environmentId: EnvironmentI
   if (!layout) return null;
   if (layout.wide)
     return (
-      <div hidden={!layout.open} className="w-80 min-w-0 shrink-0" data-manager-panel>
+      <SuperAgentPanelFrame hidden={!layout.open}>
         <ManagerPanel environmentId={environmentId} onClose={layout.close} />
-      </div>
+      </SuperAgentPanelFrame>
     );
   return (
     <Sheet
@@ -131,7 +133,13 @@ function ManagerPanel({
   const query = useEnvironmentQuery(
     serverEnvironment.superAgentLive({
       environmentId,
-      input: { kind, search, cursor, limit: 10, includeCompleted: completed },
+      input: {
+        kind,
+        search,
+        cursor,
+        limit: 10,
+        includeCompleted: completed,
+      },
     }),
   );
   const update = useAtomCommand(serverEnvironment.updateSuperAgent);
@@ -191,7 +199,7 @@ function ManagerPanel({
           ) : null}
         </div>
       </header>
-      <div className="flex gap-1 px-3 pt-3" role="tablist">
+      <div className="grid grid-cols-3 gap-1 px-3 pt-3" role="tablist">
         {(
           [
             ["goal", gt("Goals")],
@@ -211,131 +219,133 @@ function ManagerPanel({
           </Button>
         ))}
       </div>
-      <div className="flex gap-2 p-3">
-        <Input
-          aria-label={gt("Search manager records")}
-          placeholder={gt("Search...")}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setCursor(0);
-          }}
-        />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title={gt("Add record")}
-          disabled={!allowed || snapshot?.storageAvailable === false}
-          onClick={() => openEditor("new")}
-        >
-          <PlusIcon />
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto scrollbar-gutter-both px-3 pb-4">
-        {snapshot && !snapshot.storageAvailable ? (
-          <p role="alert" className="text-sm text-destructive">
-            {gt("Manager storage is unavailable. Existing files have been preserved.")}
-          </p>
-        ) : null}
-        {mutationFailed ? (
-          <p role="alert" className="text-sm text-destructive">
-            {gt("Could not save. The record may have changed; reopen it and try again.")}
-          </p>
-        ) : null}
-        {query.error ? (
-          <p role="alert" className="text-sm text-destructive">
-            {query.error}
-          </p>
-        ) : null}
-        {snapshot && snapshot.pendingDeliveries > 0 ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            {gt("Saved. Delivery is pending and will retry automatically.")}
-          </p>
-        ) : null}
-        {kind === "memory" ? (
-          <section className="space-y-2 rounded-lg border p-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">
-                <T>Stable summary</T>
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                title={gt("Edit summary")}
-                disabled={!allowed || snapshot?.storageAvailable === false}
-                onClick={() => openEditor("summary")}
-              >
-                <PencilIcon />
-              </Button>
-            </div>
-            <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-              {snapshot?.summary || gt("No collaboration summary yet.")}
-            </p>
-          </section>
-        ) : null}
-        {snapshot?.records.map((record) => (
-          <ManagerRecord
-            key={record.id}
-            record={record}
-            environmentId={environmentId}
-            disabled={!allowed || snapshot?.storageAvailable === false}
-            onEdit={() => openEditor(record)}
-            onDelete={() => mutate({ type: "delete", id: record.id })}
-            onAnswer={(answer) => mutate({ type: "answer", id: record.id, answer })}
-          />
-        ))}
-        {snapshot && !snapshot.records.length ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            <ListChecksIcon className="mx-auto mb-3 size-5" />
-            <T>Nothing needs your attention here.</T>
-          </div>
-        ) : null}
-      </div>
-      <div className="border-t px-3 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!allowed || snapshot?.storageAvailable === false}
-          onClick={() =>
-            mutate({ type: "plan", afterMinutes: snapshot?.nextCheckAt === null ? 5 : null })
-          }
-        >
-          {snapshot?.nextCheckAt === null
-            ? gt("Resume background reviews")
-            : gt("Pause background reviews")}
-        </Button>
-      </div>
-      <footer className="flex items-center justify-between gap-2 border-t p-3">
-        <label className="flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            checked={completed}
+      <>
+        <div className="flex gap-2 p-3">
+          <Input
+            aria-label={gt("Search manager records")}
+            placeholder={gt("Search...")}
+            value={search}
             onChange={(e) => {
-              setCompleted(e.target.checked);
+              setSearch(e.target.value);
               setCursor(0);
             }}
           />
-          <T>Include completed</T>
-        </label>
-        <div className="flex gap-1">
           <Button
             variant="ghost"
-            size="sm"
-            disabled={!cursor}
-            onClick={() => setCursor(Math.max(0, cursor - 10))}
+            size="icon-sm"
+            title={gt("Add record")}
+            disabled={!allowed || snapshot?.storageAvailable === false}
+            onClick={() => openEditor("new")}
           >
-            <T>Previous</T>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={snapshot?.nextCursor == null}
-            onClick={() => setCursor(snapshot?.nextCursor ?? 0)}
-          >
-            <T>Next</T>
+            <PlusIcon />
           </Button>
         </div>
-      </footer>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto scrollbar-gutter-both px-3 pb-4">
+          {snapshot && !snapshot.storageAvailable ? (
+            <p role="alert" className="text-sm text-destructive">
+              {gt("Manager storage is unavailable. Existing files have been preserved.")}
+            </p>
+          ) : null}
+          {mutationFailed ? (
+            <p role="alert" className="text-sm text-destructive">
+              {gt("Could not save. The record may have changed; reopen it and try again.")}
+            </p>
+          ) : null}
+          {query.error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {query.error}
+            </p>
+          ) : null}
+          {snapshot && snapshot.pendingDeliveries > 0 ? (
+            <p role="status" className="text-xs text-muted-foreground">
+              {gt("Saved. Delivery is pending and will retry automatically.")}
+            </p>
+          ) : null}
+          {kind === "memory" ? (
+            <section className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">
+                  <T>Stable summary</T>
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  title={gt("Edit summary")}
+                  disabled={!allowed || snapshot?.storageAvailable === false}
+                  onClick={() => openEditor("summary")}
+                >
+                  <PencilIcon />
+                </Button>
+              </div>
+              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                {snapshot?.summary || gt("No collaboration summary yet.")}
+              </p>
+            </section>
+          ) : null}
+          {snapshot?.records.map((record) => (
+            <ManagerRecord
+              key={record.id}
+              record={record}
+              environmentId={environmentId}
+              disabled={!allowed || snapshot?.storageAvailable === false}
+              onEdit={() => openEditor(record)}
+              onDelete={() => mutate({ type: "delete", id: record.id })}
+              onAnswer={(answer) => mutate({ type: "answer", id: record.id, answer })}
+            />
+          ))}
+          {snapshot && !snapshot.records.length ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              <ListChecksIcon className="mx-auto mb-3 size-5" />
+              <T>Nothing needs your attention here.</T>
+            </div>
+          ) : null}
+        </div>
+        <div className="border-t px-3 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!allowed || snapshot?.storageAvailable === false}
+            onClick={() =>
+              mutate({ type: "plan", afterMinutes: snapshot?.nextCheckAt === null ? 5 : null })
+            }
+          >
+            {snapshot?.nextCheckAt === null
+              ? gt("Resume background reviews")
+              : gt("Pause background reviews")}
+          </Button>
+        </div>
+        <footer className="flex items-center justify-between gap-2 border-t p-3">
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={completed}
+              onChange={(e) => {
+                setCompleted(e.target.checked);
+                setCursor(0);
+              }}
+            />
+            <T>Include completed</T>
+          </label>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!cursor}
+              onClick={() => setCursor(Math.max(0, cursor - 10))}
+            >
+              <T>Previous</T>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={snapshot?.nextCursor == null}
+              onClick={() => setCursor(snapshot?.nextCursor ?? 0)}
+            >
+              <T>Next</T>
+            </Button>
+          </div>
+        </footer>
+      </>
       {editing !== null && snapshot ? (
         typeof editing === "object" ? (
           <ExistingRecordEditor
@@ -429,6 +439,49 @@ function ManagerRecord({
           </Button>
         </div>
       </div>
+      {record.kind === "goal" ? (
+        <div className="space-y-2 text-xs text-muted-foreground">
+          {shown.verification ? (
+            <>
+              <p>
+                <T>Last verified</T> · {new Date(shown.verification.checkedAt).toLocaleString()}
+              </p>
+              <p className="break-words">{shown.verification.summary}</p>
+              <details>
+                <summary>
+                  <T>Verification evidence</T>
+                </summary>
+                <p className="whitespace-pre-wrap break-words">
+                  {shown.verification.evidenceQuote}
+                </p>
+              </details>
+              <p>
+                <T>Next inspection</T> · {new Date(shown.verification.nextCheckAt).toLocaleString()}
+              </p>
+            </>
+          ) : (
+            <p>
+              <T>Not verified yet</T>
+            </p>
+          )}
+          {shown.blocker ? (
+            <div className="rounded-lg border p-2">
+              <p>
+                {shown.verification?.outcome === "ready" ? (
+                  <T>Condition satisfied</T>
+                ) : (
+                  <T>Waiting for</T>
+                )}{" "}
+                · {shown.blocker.owner}
+              </p>
+              <p className="break-words">{shown.blocker.condition}</p>
+              <p className="break-words">
+                <T>Continue when ready</T> · {shown.blocker.continuation}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <p
         className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground ${expanded ? "" : "line-clamp-5"}`}
       >

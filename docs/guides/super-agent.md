@@ -17,9 +17,10 @@ It does not relay terminal screens or introduce a second chat renderer.
    the same native command identity, including after a server restart.
 
 **Review all sessions** requests an explicit review. **Pause background reviews** and
-**Resume background reviews** control stalled-goal checks. Worker state changes still
-wake the coordinator so a new result or question is not missed. The coordinator can
-choose its next check time through `super_agent_update`, including no timed check.
+**Resume background reviews** pause/resume both timed inspections and worker-change wakes.
+While enabled, a new result or question wakes the coordinator. The coordinator can
+choose its next check time through `super_agent_update`. Unfinished goals retain a fallback
+inspection when no time is chosen; only an explicit user pause stops background reviews.
 Successful background turns with no report and their internal prompts stay out of the
 conversation view; substantive reports and failed runs remain visible. The original
 transcript remains available through T3’s history tools.
@@ -37,7 +38,10 @@ The **Super Agent** entry stays fixed below the sidebar header, independently of
 worker list's sorting, scrolling, and settled sections. It opens the same coordinator
 conversation, without a duplicate ordinary thread row.
 
-On the coordinator, **Toggle right panel** opens or closes goals and decisions. Wide
+On the coordinator, **Toggle right panel** first closes the visible pull request, file,
+or other workspace view. These views temporarily replace goals and decisions; closing
+them restores the goal panel. With no workspace view open, the toggle opens or closes
+goals and decisions. Wide
 windows remember the panel's visibility; closing and reopening it preserves the current
 search and unsent decision answer. Narrow windows use a dismissible sheet. Its close
 button and review button remain separate from the underlying chat toolbar.
@@ -81,6 +85,9 @@ as a local connection. An old Herdr SSH entry is not a T3 peer link. This featur
 not import Herdr history, take over existing CLI processes, copy credentials, or migrate
 existing Forge sessions automatically.
 
+The desktop manager panel can be resized from its left edge and remembers its width;
+the chat area keeps a minimum width. Its tabs contain Goals, Decisions and Memory.
+Scheduled sessions have their own sidebar entry.
 The management panel works in the shared web/Electron UI; narrow web windows use a
 slide-out panel. Native iOS/Android can open and converse with the coordinator as an
 ordinary T3 thread, but the custom goal/decision/memory panel is not yet implemented
@@ -90,6 +97,43 @@ The coordinator role is supplied through provider instructions. It is not a sand
 that technically removes a provider's shell tools. Choose the provider permission mode
 appropriate for the work, and judge completion from worker results rather than a
 successful dispatch receipt.
+
+## Forge cron sessions
+
+Open **Scheduled sessions** below the pinned Super Agent in the sidebar, from any chat.
+Lists combine T3 native scheduled tasks from connected environments, native Forge cron
+and tracked VM plans, with a source filter and explicit offline states. T3 tasks use the
+native live subscription and pause/resume, run-now and delete commands; editing opens
+the existing T3 scheduled-task settings. Other lists remain separate, with search, paging and expandable details. Native
+schedules expose pause/resume and explicit retirement; VM plans offer a read-only
+Forge Agent check with delivery receipts and its actual reply. Closing the panel
+leaves the current conversation and remote work running.
+
+On the manager's host, sign in with `forgectl`. The coordinator uses that host's existing
+`~/.config/forge/config.yaml` (or `$XDG_CONFIG_HOME/forge/config.yaml`); it does not copy
+API keys into chat or the manager workspace. VM-local crontab/systemd plans are
+tracked separately under `<stateDir>/super-agent/forge-legacy-schedules.json`; their
+metadata does not create a native Forge schedule. Ask the existing Forge Agent to verify
+or manage those plans through `delegateLegacy`, then inspect `agentReceipt` and
+`agentConversation` until the actual result is available. Ask it to list Forge cron sessions, inspect
+scheduled outcomes, preview a schedule, create one on a named VM, or pause/resume it.
+The tools return the configured origin and account so a wrong account is visible.
+
+`forge_cron_read` takes `query` with `view` set to `list`, `detail`, `wakeups`, `results`,
+`environments`, `legacy`, `agentConversation`, `agentReceipt` or `preview`. Lists support bounded search and cursors. `forge_cron_manage`
+takes `change` with `operation` set to `create`, `configure`, `pause`, `resume`, `retire`,
+`trackLegacy`, `untrackLegacy` or `delegateLegacy`. Tracking and untracking edit only
+the inventory, never the remote schedule.
+Edits require the last-read schedule revision. Creation starts its initial task immediately
+and then saves the recurring follow-up; keep its request ID when inspecting an uncertain
+result. Completed stages are reported separately if a later step fails.
+
+Pausing stops future scheduled inputs, leaving current work running. Retiring pauses,
+closes that session and archives it while preserving history; it does not delete its VM.
+The tools are restricted to the coordinator. Goals can link a native cron through
+`forgeSessionId`; these IDs are independent of T3 thread IDs and peer environment IDs.
+Background inspections include cron wakeup/outcome changes and stay silent for unchanged
+evidence. No existing schedule is rewritten merely by enabling this integration.
 
 ## Development verification
 
@@ -105,3 +149,41 @@ request replay, stale writes, persistence and failed delivery, manager-only tool
 and quiet repeated observations. Verify the full UI flow with a real backend: create
 memory, create a decision through the model's tools, answer it, verify its receipt in the
 same conversation, reload, and check both wide and narrow layouts.
+
+## Goal inspection and quiet reporting
+
+Every unfinished goal (including blocked/pending goals, external rollouts and goals without
+reachable workers) is included in bounded background batches of at most ten goal references.
+The next batch continues after the manager becomes idle. Its durable queue survives restart;
+references are a coverage aid, not proof that a model has inspected the evidence. The manager
+reads each exact goal and follows its worker or an external evidence check to the real result.
+
+A chosen inspection deadline wakes the manager even when no worker changed. Scheduling consumes
+that deadline once; unfinished goals retain a 30-minute fallback unless the manager picks another
+interval. This is inspection, not a recurring report: unchanged evidence stays silent. An agent's
+null plan cannot abandon unfinished goals or override an explicit user pause. The panel's Pause
+background reviews control pauses both timed and worker-change inspection; Resume restores it.
+
+## Evidence-backed goal checks
+
+Delivery alone never completes a goal inspection. Background batches stay in flight until
+`super_agent_update` operation `verify` accepts evidence for every listed goal. Unverified
+batches retry with backoff; missing evidence remains visibly unverified, not successful.
+
+Read the worker or an authoritative source using a real tool, then pass `goalId`, `outcome`,
+`summary`, an exact `evidenceQuote` from that tool result, `afterMinutes` and `report`.
+The server binds evidence to a completed tool item in the current manager run. Manager
+records, dispatch acknowledgements, stale runs and fabricated quotations cannot attest a
+check. A goal card shows when it was checked, its evidence and the next inspection time.
+Only verification can mark an agent's goal completed; editing a record cannot forge checks.
+
+Blocked goals can carry `blocker: {kind, condition, owner, continuation}`. Human decisions
+remain human gates. Verifying an external condition as `ready` durably queues the saved
+continuation to the same worker, using a stable native request identity. Acceptance of that
+message is separate from finishing the task; an unavailable worker is not replaced.
+
+Use `report: null` for unchanged evidence and routine progress. A new verified milestone,
+completion, failure or pending human decision can request a report; repeated evidence is
+deduplicated. New background turns without accepted reports stay out of chat and completion
+notifications. Explicit user conversations, historical substantive reports and run errors
+remain accessible; the original transcript is never rewritten.

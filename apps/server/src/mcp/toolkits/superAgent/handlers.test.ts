@@ -1,3 +1,4 @@
+import * as ForgeCron from "../../../superAgent/ForgeCron.ts";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -17,7 +18,15 @@ it.effect.each(["manager", "worker"])(
   (caller) => {
     const id = ThreadId.make(caller);
     const snapshot = queryState({ ...emptyState(), threadId: ThreadId.make("manager") }, {});
+    let cronCalls = 0;
     const dependencies = Layer.mergeAll(
+      Layer.mock(ForgeCron.ForgeCron)({
+        read: () =>
+          Effect.sync(() => {
+            cronCalls++;
+            return { origin: "https://forge.example", actor: "user@example.com", sessions: [] };
+          }),
+      }),
       Layer.succeed(Scope.McpInvocationContext, {
         environmentId: EnvironmentId.make("test"),
         requestNamespace: "test",
@@ -46,6 +55,12 @@ it.effect.each(["manager", "worker"])(
       if (caller === "manager")
         expect(result.at(-1)?.result).toMatchObject({ threadId: "manager", revision: 0 });
       else expect(result.at(-1)?.result).toMatchObject({ code: "invalid_request" });
+      const cron = yield* toolkit
+        .handle("forge_cron_read", { query: { view: "list" } })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(cronCalls).toBe(caller === "manager" ? 1 : 0);
+      if (caller === "worker")
+        expect(cron.at(-1)?.result).toMatchObject({ code: "invalid_request" });
     }).pipe(
       Effect.provide(
         Access.HandlersLayer.layer(Handlers.layer).pipe(Layer.provideMerge(dependencies)),

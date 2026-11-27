@@ -475,7 +475,8 @@ const DismissedFallbackWindowSchema = Schema.NullOr(Schema.String);
 const ignoreComposerFocus = () => {};
 
 export default function ChatView(props: ChatViewProps) {
-  const managerPanel = useSuperAgentPanelLayout();
+  const managerLayout = useSuperAgentPanelLayout();
+  const managerPanel = managerLayout?.nativeOpen ? null : managerLayout;
   const gt = useGT();
   const messages = useMessages();
   const {

@@ -126,3 +126,37 @@ describe("manager records", () => {
     expect(queryState(state, { kind: "memory" }).summary).toBe("Prefer existing workers.");
   });
 });
+
+it("keeps unfinished goals scheduled when an agent chooses null but only the user can pause or resume inspections", () => {
+  let state = changeState(
+    emptyState(),
+    upsert(record("external", { kind: "goal", status: "blocked" }), 0),
+    "agent",
+    now,
+  );
+  const plan = (afterMinutes: number | null, actor: "user" | "agent", id: string) => {
+    state = changeState(
+      state,
+      {
+        requestId: id,
+        expectedRevision: state.revision,
+        operation: { type: "plan", afterMinutes },
+      },
+      actor,
+      now,
+    );
+  };
+  plan(null, "agent", "agent-silent");
+  expect(state.observation.nextCheckAt).toBe(Date.parse(now) + 30 * 60_000);
+  expect(state.observation.paused).toBe(false);
+  plan(120, "agent", "agent-adaptive");
+  expect(state.observation.nextCheckAt).toBe(Date.parse(now) + 120 * 60_000);
+  plan(null, "user", "pause");
+  expect(state.observation.paused).toBe(true);
+  expect(state.observation.nextCheckAt).toBeNull();
+  plan(5, "agent", "agent-cannot-resume");
+  expect(state.observation.nextCheckAt).toBeNull();
+  plan(5, "user", "resume");
+  expect(state.observation.paused).toBe(false);
+  expect(state.observation.nextCheckAt).toBe(Date.parse(now) + 5 * 60_000);
+});

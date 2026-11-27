@@ -1687,6 +1687,12 @@ export function createServerEnvironmentAtoms<R, E>(
         return Atom.make((get) => snapshot(get)?.definition?.revision);
       },
     }),
+    forgeCron: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:forge-cron:read",
+      tag: WS_METHODS.forgeCronRead,
+      staleTimeMs: 10_000,
+      refreshIntervalMs: 60_000,
+    }),
     superAgentLive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:super-agent:live",
       tag: WS_METHODS.superAgentSubscribe,
@@ -1978,6 +1984,12 @@ export function createServerEnvironmentAtoms<R, E>(
     updateSuperAgent: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:super-agent:update",
       tag: WS_METHODS.superAgentUpdate,
+      scheduler: configScheduler,
+      concurrency: configConcurrency,
+    }),
+    manageForgeCron: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:forge-cron:manage",
+      tag: WS_METHODS.forgeCronManage,
       scheduler: configScheduler,
       concurrency: configConcurrency,
     }),

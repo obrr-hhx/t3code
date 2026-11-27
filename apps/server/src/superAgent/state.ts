@@ -1,5 +1,14 @@
-import { emptyObservation, type ObservationState } from "./observations.ts";
+import * as DateTime from "effect/DateTime";
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- stable evidence and delivery identity.
+import * as NodeCrypto from "node:crypto";
+import {
+  DEFAULT_GOAL_CHECK_MS,
+  isUnfinishedGoal,
+  emptyObservation,
+  type ObservationState,
+} from "./observations.ts";
 import type {
+  RunId,
   ProjectId,
   SuperAgentMutation,
   SuperAgentQuery,
@@ -10,6 +19,15 @@ import type {
 import { SuperAgentError } from "@t3tools/contracts";
 
 export interface State {
+  readonly reportPolicyAt: string | null;
+  readonly reportRunIds: ReadonlyArray<RunId>;
+  readonly continuations: ReadonlyArray<{
+    readonly id: string;
+    readonly goalId: string;
+    readonly threadId: ThreadId;
+    readonly environmentId?: import("@t3tools/contracts").EnvironmentId | undefined;
+    readonly text: string;
+  }>;
   readonly observation: ObservationState;
   readonly notices: ReadonlyArray<{ readonly id: string; readonly text: string }>;
   readonly version: 1;
@@ -21,6 +39,9 @@ export interface State {
   readonly receipts: ReadonlyArray<{ readonly id: string; readonly payload: string }>;
 }
 export const emptyState = (): State => ({
+  reportPolicyAt: null,
+  reportRunIds: [],
+  continuations: [],
   observation: emptyObservation(),
   notices: [],
   version: 1,
@@ -48,8 +69,15 @@ export function queryState(state: State, query: SuperAgentQuery): SuperAgentSnap
   const offset = query.cursor ?? 0,
     limit = Math.min(20, query.limit ?? 10);
   return {
+    ...(state.reportPolicyAt ? { reportPolicyAt: state.reportPolicyAt } : {}),
+    reportRunIds: state.reportRunIds.filter((id) =>
+      query.reportRunIds
+        ? query.reportRunIds.includes(id)
+        : state.reportRunIds.slice(-256).includes(id),
+    ),
+    pendingVerificationIds: state.observation.inFlight?.goalIds ?? [],
     nextCheckAt: state.observation.nextCheckAt,
-    pendingDeliveries: state.notices.length,
+    pendingDeliveries: state.notices.length + state.continuations.length,
     storageAvailable: true,
     threadId: state.threadId,
     projectId: state.projectId,
@@ -80,12 +108,104 @@ export function changeState(
   let records = [...state.records],
     summary = state.summary;
   const op = input.operation;
-  if (op.type === "plan")
+  let reportRunIds = state.reportRunIds,
+    continuations = state.continuations;
+  if (op.type === "plan") {
+    const paused = actor === "user" ? op.afterMinutes === null : observation.paused;
     observation = {
       ...observation,
-      nextCheckAt: op.afterMinutes === null ? null : Date.parse(now) + op.afterMinutes * 60000,
+      paused,
+      ...(paused ? { pending: null, reviewQueue: [], inFlight: null } : {}),
+      nextCheckAt: paused
+        ? null
+        : op.afterMinutes !== null
+          ? Date.parse(now) + op.afterMinutes * 60000
+          : records.some(isUnfinishedGoal)
+            ? Date.parse(now) + DEFAULT_GOAL_CHECK_MS
+            : null,
     };
-  else if (op.type === "summary") summary = op.text;
+  } else if (op.type === "verify") {
+    const goal = records.find((r) => r.id === op.goalId && r.kind === "goal");
+    if (!goal || !op.runId || !op.evidenceItemId) throw new SuperAgentError({ reason: "invalid" });
+    const fingerprint = NodeCrypto.createHash("sha256")
+      .update(
+        JSON.stringify([
+          goal.id,
+          op.outcome,
+          op.evidenceQuote.replace(/\s+/g, " ").trim(),
+          goal.blocker?.condition,
+        ]),
+      )
+      .digest("hex");
+    const changed = fingerprint !== goal.verification?.fingerprint;
+    const verification = {
+      checkedAt: now,
+      outcome: op.outcome,
+      summary: op.summary,
+      evidenceQuote: op.evidenceQuote,
+      evidenceItemId: op.evidenceItemId,
+      runId: op.runId,
+      fingerprint,
+      nextCheckAt: DateTime.formatIso(
+        DateTime.makeUnsafe(Date.parse(now) + op.afterMinutes * 60000),
+      ),
+    };
+    if (
+      op.outcome === "ready" &&
+      (!goal.blocker ||
+        goal.blocker.kind !== "external" ||
+        !goal.workerThreadId ||
+        !goal.blocker.continuation.trim())
+    )
+      throw new SuperAgentError({ reason: "invalid" });
+    if (op.report && op.outcome !== "unchanged" && changed) {
+      if (
+        op.report === "decision" &&
+        !records.some(
+          (r) => r.kind === "decision" && r.goalId === goal.id && r.status === "pending",
+        )
+      )
+        throw new SuperAgentError({ reason: "invalid" });
+      reportRunIds = [...new Set([...reportRunIds, op.runId])];
+    }
+    if (op.outcome === "ready" && changed && goal.status === "blocked") {
+      const id = `goal-resume:${goal.id}:${fingerprint.slice(0, 24)}`;
+      if (!continuations.some((c) => c.goalId === goal.id))
+        continuations = [
+          ...continuations,
+          {
+            id,
+            goalId: goal.id,
+            threadId: goal.workerThreadId!,
+            ...(goal.workerEnvironmentId ? { environmentId: goal.workerEnvironmentId } : {}),
+            text: `目标「${goal.title}」的外部恢复条件已查证：${goal.blocker!.condition}。\n依据：${op.summary}\n接续原任务：${goal.blocker!.continuation}`,
+          },
+        ];
+    }
+    records = records.map((r) =>
+      r.id === goal.id
+        ? {
+            ...r,
+            verification,
+            updatedAt: now,
+            status: op.outcome === "completed" ? "done" : r.status,
+          }
+        : r,
+    );
+    if (!observation.paused) {
+      const deadlines = records
+        .filter(isUnfinishedGoal)
+        .map((g) =>
+          g.verification
+            ? Date.parse(g.verification.nextCheckAt)
+            : Date.parse(now) + DEFAULT_GOAL_CHECK_MS,
+        );
+      observation = {
+        ...observation,
+        nextCheckAt: deadlines.length ? Math.min(...deadlines) : null,
+      };
+    }
+  } else if (op.type === "summary") summary = op.text;
   else if (op.type === "delete") {
     if (actor !== "user") throw new SuperAgentError({ reason: "invalid" });
     records = records.filter((r) => r.id !== op.id);
@@ -105,11 +225,34 @@ export function changeState(
           r.goalId === incoming.goalId &&
           r.dedupeKey === incoming.dedupeKey),
     );
+    if (
+      actor === "agent" &&
+      incoming.kind === "goal" &&
+      incoming.status === "done" &&
+      old?.status !== "done"
+    )
+      throw new SuperAgentError({ reason: "invalid" });
+    if (
+      actor === "agent" &&
+      old?.blocker?.kind === "human" &&
+      incoming.blocker?.kind !== "human" &&
+      !records.some(
+        (r) =>
+          r.kind === "decision" &&
+          r.goalId === old.id &&
+          r.status === "answered" &&
+          r.answer !== null,
+      )
+    )
+      throw new SuperAgentError({ reason: "invalid" });
     if (old && old.kind !== incoming.kind) throw new SuperAgentError({ reason: "invalid" });
     if (actor === "agent" && incoming.answer !== null && old?.answer !== incoming.answer)
       throw new SuperAgentError({ reason: "invalid" });
+    const { verification: _untrustedVerification, ...editable } = incoming;
     const updated = {
-      ...incoming,
+      ...editable,
+      ...(!incoming.blocker && old?.blocker ? { blocker: old.blocker } : {}),
+      ...(old?.verification ? { verification: old.verification } : {}),
       id: old?.id ?? incoming.id,
       answer: old?.answer ?? incoming.answer,
       updatedAt: now,
@@ -122,6 +265,8 @@ export function changeState(
   return {
     ...state,
     observation,
+    reportRunIds,
+    continuations,
     notices:
       actor === "user" &&
       (op.type === "answer" || (op.type === "upsert" && op.record.kind === "goal"))

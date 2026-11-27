@@ -175,4 +175,52 @@ it.layer(NodeServices.layer)("Super Agent persistence", (it) => {
       assert.strictEqual((yield* store.read({})).nextCheckAt, null);
     }),
   );
+  it.effect(
+    "loads old observation records and persists the unfinished review queue across restart",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const config = yield* Config.ServerConfig.pipe(
+          Effect.provide(Config.layerTest(process.cwd(), { prefix: "t3-review-migration-" })),
+        );
+        const file = `${config.stateDir}/super-agent/state.json`;
+        yield* fs.makeDirectory(`${config.stateDir}/super-agent`, { recursive: true });
+        yield* fs.writeFileString(
+          file,
+          JSON.stringify({
+            version: 1,
+            threadId: null,
+            projectId: null,
+            revision: 0,
+            summary: "",
+            records: [],
+            receipts: [],
+            observation: {
+              generation: 0,
+              signature: null,
+              lastStall: null,
+              nextCheckAt: null,
+              pending: null,
+            },
+          }),
+        );
+        const layer = Store.layer.pipe(Layer.provide(Layer.succeed(Config.ServerConfig, config)));
+        const first = yield* Store.SuperAgentStore.pipe(Effect.provide(layer));
+        const old = yield* first.stored;
+        assert.strictEqual(old.observation.paused, false);
+        assert.deepStrictEqual(old.observation.reviewQueue, []);
+        yield* first.recordObservation({
+          ...old.observation,
+          reviewQueue: ["goal-11", "goal-12"],
+          nextCheckAt: 1800000,
+          pending: { id: "stable-request", text: "Goal batch" },
+        });
+        const second = yield* Store.SuperAgentStore.pipe(Effect.provide(layer));
+        assert.deepStrictEqual((yield* second.stored).observation.reviewQueue, [
+          "goal-11",
+          "goal-12",
+        ]);
+        assert.strictEqual((yield* second.stored).observation.pending?.id, "stable-request");
+      }),
+  );
 });

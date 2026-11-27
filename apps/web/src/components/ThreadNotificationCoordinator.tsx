@@ -1,3 +1,6 @@
+import { allowsManagerCompletion } from "./ThreadNotificationCoordinator.logic";
+import { serverEnvironment } from "../state/server";
+import { AsyncResult } from "effect/reactivity";
 import { msg } from "gt-react";
 import { m } from "../i18n/messages";
 import {
@@ -320,6 +323,26 @@ export function startThreadNotifications(
       unsubscribe: () => {},
       gate: createThreadNotificationGate<ThreadId>((threadId, kind) => {
         const state = entry.previous.get(threadId);
+        if (
+          state &&
+          threadId === "super-agent-manager" &&
+          state.backgroundWake &&
+          kind === "completion"
+        ) {
+          const result = registry.get(
+            serverEnvironment.superAgentLive({ environmentId, input: { limit: 1 } }),
+          );
+          const snapshot = AsyncResult.getOrElse(result, () => null);
+          if (
+            !allowsManagerCompletion(
+              threadId,
+              state.backgroundWake,
+              state.thread.latestRun!.runId,
+              snapshot?.reportRunIds ?? [],
+            )
+          )
+            return;
+        }
         if (state) present(environmentId, state, kind);
       }),
     };
@@ -343,6 +366,10 @@ export function startThreadNotifications(
     const reobserve = () => {
       if (threads !== null) observeThreads(environmentId, entry, threads);
     };
+    const unsubscribeReports = registry.subscribe(
+      serverEnvironment.superAgentLive({ environmentId, input: { limit: 1 } }),
+      () => {},
+    );
     const unsubscribeRequests = registry.subscribe(
       environmentThreadShells.pendingSubagentRequestsAtom(environmentId),
       reobserve,
@@ -353,6 +380,7 @@ export function startThreadNotifications(
     );
     entry.unsubscribe = () => {
       unsubscribeShell();
+      unsubscribeReports();
       unsubscribeRequests();
       unsubscribeDelegated();
       entry.gate.clear();

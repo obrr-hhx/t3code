@@ -120,6 +120,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.superAgentEnsure]: "superAgent",
   [WS_METHODS.superAgentUpdate]: "superAgent",
   [WS_METHODS.superAgentReview]: "superAgent",
+  [WS_METHODS.forgeCronRead]: "forgeCron",
+  [WS_METHODS.forgeCronManage]: "forgeCron",
   [WS_METHODS.scheduledTasksSubscribe]: "scheduledTasks",
   [WS_METHODS.scheduledTasksUpsert]: "scheduledTasks",
   [WS_METHODS.scheduledTasksSetEnabled]: "scheduledTasks",

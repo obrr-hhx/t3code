@@ -1,6 +1,8 @@
 import type { ObservationState } from "./observations.ts";
 import * as DateTime from "effect/DateTime";
 import {
+  EnvironmentId,
+  RunId,
   ProjectId,
   ThreadId,
   SuperAgentError,
@@ -22,10 +24,36 @@ import * as ServerConfig from "../config.ts";
 import { changeState, emptyState, queryState, type State } from "./state.ts";
 import { SUPER_AGENT_INSTRUCTIONS } from "./prompt.ts";
 const StoredState = Schema.Struct({
+  reportPolicyAt: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
+  reportRunIds: Schema.Array(RunId).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+  continuations: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      goalId: Schema.String,
+      threadId: ThreadId,
+      environmentId: Schema.optional(EnvironmentId),
+      text: Schema.String,
+    }),
+  ).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   notices: Schema.Array(Schema.Struct({ id: Schema.String, text: Schema.String })).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed([])),
   ),
   observation: Schema.Struct({
+    inFlight: Schema.NullOr(
+      Schema.Struct({
+        id: Schema.String,
+        goalIds: Schema.Array(Schema.String),
+        issuedAt: Schema.Number,
+        retryAt: Schema.Number,
+        attempt: Schema.Number,
+      }),
+    ).pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
+    paused: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+    reviewQueue: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefaultKey(Effect.succeed([])),
+    ),
     generation: Schema.Number.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
     signature: Schema.NullOr(Schema.String),
     lastStall: Schema.NullOr(Schema.String),
@@ -54,6 +82,7 @@ export class SuperAgentStore extends Context.Service<
       value: ObservationState,
       expected?: ObservationState,
     ) => Effect.Effect<boolean, SuperAgentError>;
+    readonly acknowledgeContinuation: (id: string) => Effect.Effect<void, SuperAgentError>;
     readonly acknowledgeNotice: (id: string) => Effect.Effect<void, SuperAgentError>;
     readonly workspace: string;
     readonly syncMemory: Effect.Effect<void, SuperAgentError>;
@@ -94,6 +123,16 @@ const make = Effect.gen(function* () {
     state = next;
     yield* PubSub.publish(changes, undefined);
   });
+  if (storageAvailable && state.reportPolicyAt === null) {
+    state = { ...state, reportPolicyAt: DateTime.formatIso(yield* DateTime.now) };
+    yield* save(state).pipe(
+      Effect.catch(() =>
+        Effect.logWarning(
+          "Manager report policy is active in memory; durable saving will be retried by the next update.",
+        ),
+      ),
+    );
+  }
   const syncMemory = Effect.fn("SuperAgentStore.syncMemory")(function* () {
     if (!storageAvailable) return yield* new SuperAgentError({ reason: "storage" });
     if (!memoryDirty) return;
@@ -177,6 +216,25 @@ const make = Effect.gen(function* () {
     read,
     recordObservation,
     acknowledgeNotice,
+    acknowledgeContinuation: Effect.fn("SuperAgentStore.acknowledgeContinuation")((id) =>
+      lock
+        .withPermits(1)(
+          Effect.suspend(() =>
+            save({
+              ...state,
+              revision: state.revision + 1,
+              records: state.records.map((g) =>
+                state.continuations.some((c) => c.id === id && c.goalId === g.id) &&
+                g.status === "blocked"
+                  ? { ...g, status: "active" as const }
+                  : g,
+              ),
+              continuations: state.continuations.filter((c) => c.id !== id),
+            }),
+          ),
+        )
+        .pipe(Effect.mapError(() => new SuperAgentError({ reason: "storage" }))),
+    ),
     stored: Effect.sync(() => state),
     workspace,
     bind,
