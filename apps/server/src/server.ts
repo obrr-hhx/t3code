@@ -1,3 +1,4 @@
+import * as ForgeCron from "./superAgent/ForgeCron.ts";
 import * as SuperAgentStore from "./superAgent/SuperAgentStore.ts";
 import * as SuperAgentObserver from "./superAgent/SuperAgentObserver.ts";
 import * as SuperAgent from "./superAgent/SuperAgentService.ts";
@@ -943,6 +944,7 @@ const layerMakeRoutes = Layer.mergeAll(
   ),
 ).pipe(
   Layer.provide(SuperAgent.layer),
+  Layer.provide(ForgeCron.layer),
   Layer.provide(
     PullRequestReviewGuideService.layer.pipe(Layer.provide(PullRequestReviewGuides.layer)),
   ),

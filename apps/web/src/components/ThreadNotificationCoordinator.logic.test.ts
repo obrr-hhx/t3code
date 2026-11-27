@@ -244,3 +244,11 @@ describe("isSnoozedForNotification", () => {
     expect(isSnoozedForNotification(shell, completedAt, now)).toBe(expected);
   });
 });
+
+it("blocks unapproved manager background completion notifications while preserving real reports and ordinary threads", async () => {
+  const { allowsManagerCompletion } = await import("./ThreadNotificationCoordinator.logic");
+  expect(allowsManagerCompletion("super-agent-manager", true, "quiet", [])).toBe(false);
+  expect(allowsManagerCompletion("super-agent-manager", true, "report", ["report"])).toBe(true);
+  expect(allowsManagerCompletion("super-agent-manager", false, "user", [])).toBe(true);
+  expect(allowsManagerCompletion("worker", true, "worker-result", [])).toBe(true);
+});

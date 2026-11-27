@@ -1,8 +1,10 @@
+import { deliverContinuations } from "./continuations.ts";
 import { CommandId, MessageId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as ForgeCron from "./ForgeCron.ts";
 import * as Store from "./SuperAgentStore.ts";
 import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
@@ -15,12 +17,15 @@ const start = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
   const peers = yield* PeerMcpClient.PeerMcpClient;
   const store = yield* Store.SuperAgentStore;
+  const cron = yield* ForgeCron.ForgeCron;
   const threads = yield* Threads.ThreadManagementService;
   const tick = Effect.fn("SuperAgentObserver.tick")(function* () {
     yield* store.syncMemory;
     const state = yield* store.stored;
     if (!state.threadId || !state.projectId) return;
     yield* deliverNotices(store, threads);
+    if (state.observation.paused) return;
+    yield* deliverContinuations(store, threads, peers);
     let pending = state.observation.pending;
     if (!pending) {
       const manager = yield* threads.getThreadShell(state.threadId);
@@ -49,9 +54,10 @@ const start = Effect.gen(function* () {
           updatedAt: DateTime.toEpochMillis(w.updatedAt),
         }));
       const remoteWorkers = yield* readRemoteWorkers(links, peers);
+      const cronWorkers = yield* cron.observe;
       const next = observe(
         state.observation,
-        [...observations, ...remoteWorkers],
+        [...observations, ...remoteWorkers, ...cronWorkers],
         state.records,
         yield* Clock.currentTimeMillis,
       );

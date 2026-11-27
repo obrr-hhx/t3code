@@ -1,12 +1,26 @@
 import type { RunId } from "@t3tools/contracts";
 import type { TimelineEntry } from "../../session-logic";
 
+// The timeline compares input identity while restoring scroll/disclosure state. Keep the
+// filtered view stable for unchanged immutable entries and the same disclosure policy.
+const views = new WeakMap<
+  ReadonlyArray<TimelineEntry>,
+  { key: string; value: ReadonlyArray<TimelineEntry> }
+>();
 /** Preserve the transcript; hide internal review prompts and successful turns with no report. */
 export function visibleManagerReviews(
   entries: ReadonlyArray<TimelineEntry>,
   runIdOf: (entry: TimelineEntry) => RunId | null,
   failedRuns: ReadonlySet<RunId>,
+  policy?: { readonly since: string; readonly allowed: ReadonlySet<RunId> },
 ): ReadonlyArray<TimelineEntry> {
+  const key = JSON.stringify([
+    [...failedRuns].sort(),
+    policy?.since,
+    [...(policy?.allowed ?? [])].sort(),
+  ]);
+  const cached = views.get(entries);
+  if (cached?.key === key) return cached.value;
   const internal = (entry: TimelineEntry) =>
     entry.kind === "message" &&
     entry.message.role === "user" &&
@@ -36,9 +50,32 @@ export function visibleManagerReviews(
     )
       substantive.add(runId);
   }
-  return entries.filter((entry) => {
+  const value = entries.filter((entry) => {
     if (internal(entry)) return false;
     const runId = runIdOf(entry);
-    return !runId || !finishedEmpty.has(runId) || substantive.has(runId) || failedRuns.has(runId);
+    if (!runId || !runs.has(runId)) return true;
+    if (failedRuns.has(runId)) return true;
+    const prompt = entries.find(
+      (e) => internal(e) && (e.kind === "message" ? e.message.runId : runIdOf(e)) === runId,
+    );
+    if (policy && prompt && prompt.createdAt >= policy.since && !policy.allowed.has(runId))
+      return false;
+    if (
+      entry.kind === "message" &&
+      entry.message.role === "assistant" &&
+      isReviewNoise(entry.message.text)
+    )
+      return false;
+    return !finishedEmpty.has(runId) || substantive.has(runId);
   });
+  views.set(entries, { key, value });
+  return value;
+}
+
+/** Applied only to background reviews; ordinary user questions always retain their answers. */
+function isReviewNoise(text: string): boolean {
+  const value = text.trim();
+  return /^(?:[（(]后台巡检[:：][\s\S]*[）)]|(?:无新增变化|暂无进展|暂无新增需汇报事项|继续静默等待)[。.!！]?|(?:No (?:changes|updates|new results)[.!]?))$/i.test(
+    value,
+  );
 }

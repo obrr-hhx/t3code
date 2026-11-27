@@ -83,6 +83,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.superAgentEnsure]: AuthOrchestrationOperateScope,
   [WS_METHODS.superAgentUpdate]: AuthOrchestrationOperateScope,
   [WS_METHODS.superAgentReview]: AuthOrchestrationOperateScope,
+  [WS_METHODS.forgeCronManage]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksUpsert]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksSetEnabled]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,

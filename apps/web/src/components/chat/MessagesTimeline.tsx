@@ -1,3 +1,7 @@
+import { failedTimelineRunIds } from "./MessagesTimeline.logic";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
+import { visibleManagerReviews } from "../superAgent/backgroundPresentation";
 import { T, useGT, useMessages, Var } from "gt-react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
@@ -389,7 +393,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   awaitingUser = null,
   awaitingRequestId = null,
   listRef,
-  timelineEntries,
+  timelineEntries: rawTimelineEntries,
   findOpen = false,
   findExpanded = false,
   findQuery = "",
@@ -502,6 +506,39 @@ const ConversationTimeline = memo(function ConversationTimeline({
     setExpandedAttemptIds(paintedExpandedAttemptIds);
   }
   const citationThreadRef = parseScopedThreadKey(routeThreadKey);
+  const managerReports = useEnvironmentQuery(
+    citationThreadRef?.threadId === "super-agent-manager"
+      ? serverEnvironment.superAgentLive({
+          environmentId: citationThreadRef.environmentId,
+          input: {
+            limit: 1,
+            reportRunIds: [
+              ...new Set(
+                rawTimelineEntries.flatMap((e) =>
+                  e.kind === "message" && e.message.runId ? [e.message.runId] : [],
+                ),
+              ),
+            ].slice(-100),
+          },
+        })
+      : null,
+  );
+  const timelineEntries = visibleManagerReviews(
+    rawTimelineEntries,
+    (entry) =>
+      entry.kind === "message"
+        ? (entry.message.runId ?? null)
+        : entry.kind === "work"
+          ? (entry.entry.runId ?? null)
+          : null,
+    failedTimelineRunIds(rawTimelineEntries, latestRun ?? null),
+    citationThreadRef?.threadId === "super-agent-manager"
+      ? {
+          since: managerReports.data?.reportPolicyAt ?? "1970-01-01T00:00:00Z",
+          allowed: new Set(managerReports.data?.reportRunIds ?? []),
+        }
+      : undefined,
+  );
   const openPullRequest = useOpenPrLink(citationThreadRef ?? undefined);
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
   const normalizedFindQuery = findQuery.trim();

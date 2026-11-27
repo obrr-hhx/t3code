@@ -1,3 +1,4 @@
+import { useRightPanelStore, selectThreadRightPanelState } from "../rightPanelStore";
 import { SuperAgentPanelLayout } from "../components/superAgent/panelLayout";
 import { SuperAgentPanel } from "../components/superAgent/SuperAgent";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
@@ -14,8 +15,16 @@ import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
 function ChatRouteLayout() {
   // Render both routes here so draft promotion keeps the same ChatView mounted.
   const { shownTarget, modalOpen } = useShownThreadRouteTarget();
+  const nativeOpen = useRightPanelStore(
+    (state) =>
+      selectThreadRightPanelState(
+        state.byThreadKey,
+        shownTarget?.kind === "server" ? shownTarget.threadRef : null,
+      ).isOpen,
+  );
   return (
     <SuperAgentPanelLayout
+      nativeOpen={nativeOpen}
       active={
         shownTarget?.kind === "server" &&
         shownTarget.threadRef.threadId === "super-agent-manager" &&

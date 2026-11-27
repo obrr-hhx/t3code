@@ -1,3 +1,4 @@
+import * as ForgeCron from "./superAgent/ForgeCron.ts";
 import * as SuperAgent from "./superAgent/SuperAgentService.ts";
 import { GitCommandError, OrchestrationDispatchCommandError } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- A synchronous digest inside the pure provider mapping.
@@ -1512,6 +1513,7 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const superAgent = yield* SuperAgent.SuperAgentService;
+      const forgeCron = yield* ForgeCron.ForgeCron;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2450,6 +2452,8 @@ export const layerWsRpc = (
         [WS_METHODS.superAgentEnsure]: (input) => superAgent.ensure(input),
         [WS_METHODS.superAgentUpdate]: (input) => superAgent.update(input, "user"),
         [WS_METHODS.superAgentReview]: () => superAgent.review(),
+        [WS_METHODS.forgeCronRead]: (input) => forgeCron.read(input),
+        [WS_METHODS.forgeCronManage]: (input) => forgeCron.manage(input),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),
@@ -3818,6 +3822,7 @@ export const WS_RPC_SERVER_OPTIONS = {
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const superAgent = yield* SuperAgent.SuperAgentService;
+    const forgeCron = yield* ForgeCron.ForgeCron;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
@@ -3910,9 +3915,10 @@ export const layer = Layer.unwrap(
               Layer.provideMerge(RpcSerialization.layerJson),
               // Handler-context reporters see only request defects, not server-wide defects.
               Layer.provide(
-                Layer.merge(
+                Layer.mergeAll(
                   DefectReporter.layer,
                   Layer.succeed(SuperAgent.SuperAgentService, superAgent),
+                  Layer.succeed(ForgeCron.ForgeCron, forgeCron),
                 ),
               ),
               Layer.provide(AcpRegistrySessions.layer),

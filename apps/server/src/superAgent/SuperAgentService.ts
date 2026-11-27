@@ -1,3 +1,4 @@
+import { attestVerification } from "./verification.ts";
 import * as Clock from "effect/Clock";
 import {
   CommandId,
@@ -103,7 +104,7 @@ const make = Effect.gen(function* () {
   );
   const update = Effect.fn("SuperAgentService.update")(
     function* (input: SuperAgentMutation, actor: "user" | "agent") {
-      yield* store.update(input, actor);
+      yield* store.update(yield* attestVerification(input, store, threads), actor);
       yield* deliverNotices(store, threads).pipe(
         Effect.catch(() =>
           Effect.logWarning("Super Agent delivery deferred; the saved request will be retried."),
