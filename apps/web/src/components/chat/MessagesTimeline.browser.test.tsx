@@ -543,6 +543,85 @@ describe("MessagesTimeline work rows", () => {
 });
 
 describe("MessagesTimeline messages", () => {
+  it("keeps approved manager history in place while a new report subscription loads", async () => {
+    setup();
+    const props = {
+      ...baseProps(),
+      routeThreadKey: "environment-local:super-agent-manager",
+      liveFollowEnabled: false,
+    };
+    const runId = RunId.make("approved-review");
+    const entries = [
+      message(
+        "Internal inspection",
+        {
+          runId,
+          createdBy: "system",
+          creationSource: "server",
+        },
+        "super-agent-observe:history",
+      ),
+      message(
+        Array.from(
+          { length: 60 },
+          (_, i) => `Verified result ${i}. ${"Evidence retained. ".repeat(12)}`,
+        ).join("\n\n"),
+        { runId, role: "assistant" },
+        "approved-history",
+      ),
+    ];
+    environmentQuery.data = { reportPolicyAt: CREATED_AT, reportRunIds: [runId] };
+    await using screen = await renderElement(
+      <MessagesTimeline {...props} timelineEntries={entries} />,
+    );
+    const list = props.listRef.current!;
+    const viewport = list.getScrollableNode()!;
+    await vi.waitFor(() => expect(viewport.scrollHeight).toBeGreaterThan(4000));
+    await act(async () => {
+      await list.scrollToOffset({ offset: 700, animated: false });
+      viewport.dispatchEvent(new Event("scroll"));
+    });
+    const top = viewport.scrollTop;
+    const height = viewport.scrollHeight;
+    expect(top).toBeGreaterThan(0);
+
+    environmentQuery.data = null;
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        timelineEntries={[
+          ...entries,
+          message(
+            "Next inspection",
+            {
+              runId: RunId.make("next-review"),
+              createdBy: "system",
+              creationSource: "server",
+            },
+            "super-agent-observe:next",
+          ),
+        ]}
+      />,
+    );
+    expect(screen.text()).toContain("Verified result 0.");
+    expect(Math.abs(viewport.scrollHeight - height)).toBeLessThan(2);
+    expect(Math.abs(viewport.scrollTop - top)).toBeLessThan(2);
+
+    environmentQuery.data = { reportPolicyAt: CREATED_AT, reportRunIds: [] };
+    await screen.rerender(<MessagesTimeline {...props} timelineEntries={entries} />);
+    expect(screen.text()).toContain("Verified result 0.");
+    expect(Math.abs(viewport.scrollTop - top)).toBeLessThan(2);
+
+    environmentQuery.data = null;
+    await screen.rerender(
+      <MessagesTimeline
+        {...props}
+        routeThreadKey="another-environment:super-agent-manager"
+        timelineEntries={entries}
+      />,
+    );
+    expect(screen.text()).not.toContain("Verified result 0.");
+  });
   it("settles when equally long messages have very different rendered heights", async () => {
     const props = baseProps();
     const tall = message("a\n\n".repeat(6000), { role: "assistant" }, "tall");

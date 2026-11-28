@@ -1,6 +1,28 @@
 import type { RunId } from "@t3tools/contracts";
 import type { TimelineEntry } from "../../session-logic";
 
+export interface ManagerReportPolicy {
+  readonly since: string;
+  readonly allowed: ReadonlySet<RunId>;
+}
+
+/** Approval queries cover changing windows; a pending/new window must not revoke earlier results. */
+export function retainManagerReportPolicy(
+  previous: ManagerReportPolicy | undefined,
+  snapshot: {
+    readonly reportPolicyAt?: string | undefined;
+    readonly reportRunIds?: ReadonlyArray<RunId> | undefined;
+  } | null,
+): ManagerReportPolicy | undefined {
+  if (!snapshot?.reportPolicyAt) return previous;
+  const allowed = snapshot.reportRunIds ?? [];
+  if (previous?.since === snapshot.reportPolicyAt) {
+    if (allowed.every((id) => previous.allowed.has(id))) return previous;
+    return { since: previous.since, allowed: new Set([...previous.allowed, ...allowed]) };
+  }
+  return { since: snapshot.reportPolicyAt, allowed: new Set(allowed) };
+}
+
 // The timeline compares input identity while restoring scroll/disclosure state. Keep the
 // filtered view stable for unchanged immutable entries and the same disclosure policy.
 const views = new WeakMap<
@@ -12,7 +34,7 @@ export function visibleManagerReviews(
   entries: ReadonlyArray<TimelineEntry>,
   runIdOf: (entry: TimelineEntry) => RunId | null,
   failedRuns: ReadonlySet<RunId>,
-  policy?: { readonly since: string; readonly allowed: ReadonlySet<RunId> },
+  policy?: ManagerReportPolicy,
 ): ReadonlyArray<TimelineEntry> {
   const key = JSON.stringify([
     [...failedRuns].sort(),
