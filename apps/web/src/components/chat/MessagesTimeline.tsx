@@ -1,7 +1,11 @@
 import { failedTimelineRunIds } from "./MessagesTimeline.logic";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { visibleManagerReviews } from "../superAgent/backgroundPresentation";
+import {
+  retainManagerReportPolicy,
+  visibleManagerReviews,
+  type ManagerReportPolicy,
+} from "../superAgent/backgroundPresentation";
 import { T, useGT, useMessages, Var } from "gt-react";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
 import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
@@ -523,6 +527,22 @@ const ConversationTimeline = memo(function ConversationTimeline({
         })
       : null,
   );
+  const [rememberedManagerPolicy, setRememberedManagerPolicy] = useState<{
+    identity: string;
+    policy: ManagerReportPolicy | undefined;
+  }>(() => ({ identity: routeThreadKey, policy: undefined }));
+  const managerPolicy = retainManagerReportPolicy(
+    rememberedManagerPolicy.identity === routeThreadKey
+      ? rememberedManagerPolicy.policy
+      : undefined,
+    managerReports.data,
+  );
+  if (
+    rememberedManagerPolicy.identity !== routeThreadKey ||
+    rememberedManagerPolicy.policy !== managerPolicy
+  ) {
+    setRememberedManagerPolicy({ identity: routeThreadKey, policy: managerPolicy });
+  }
   const timelineEntries = visibleManagerReviews(
     rawTimelineEntries,
     (entry) =>
@@ -534,8 +554,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     failedTimelineRunIds(rawTimelineEntries, latestRun ?? null),
     citationThreadRef?.threadId === "super-agent-manager"
       ? {
-          since: managerReports.data?.reportPolicyAt ?? "1970-01-01T00:00:00Z",
-          allowed: new Set(managerReports.data?.reportRunIds ?? []),
+          since: managerPolicy?.since ?? "1970-01-01T00:00:00Z",
+          allowed: managerPolicy?.allowed ?? EMPTY_RUN_IDS,
         }
       : undefined,
   );
